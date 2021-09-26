@@ -8,7 +8,7 @@
 
 import { isTouch, isWebkit } from '../common/browser.js'; // , isOpera
 import { getRotationAngle, getBBox, getStrokedBBox, isNullish } from './utilities.js';
-import { transformListToTransform, transformBox, transformPoint } from './math.js';
+import { transformListToTransform, transformBox, transformPoint, matrixMultiply } from './math.js';
 
 let svgFactory_;
 let config_;
@@ -110,10 +110,17 @@ export class Selector {
     const mgr = selectorManager_;
     const selectedGrips = mgr.selectorGrips;
     const selected = this.selectedElement;
-    const sw = selected.getAttribute('stroke-width');
+    let sw = selected.getAttribute('stroke-width');
     const currentZoom = svgFactory_.getCurrentZoom();
+    const currentDrawing = svgFactory_.getCanvas().getCurrentDrawing();
+
     let offset = 1 / currentZoom;
     if (selected.getAttribute('stroke') !== 'none' && !isNaN(sw)) {
+      if (currentDrawing.getSvgElem() != svgFactory_.svgContent()) {
+        // Need to calculate stroke width in parent viewport to handle nested svg with viewBox.
+        // Scale factor is the length of the basis vectors of the current transform matrix
+        sw *= currentDrawing.getCurrentLayer().getCTM().a;
+      }
       offset += (sw / 2);
     }
 
@@ -124,12 +131,9 @@ export class Selector {
 
     // loop and transform our bounding box until we reach our first rotation
     const tlist = selected.transform.baseVal;
-    const m = transformListToTransform(tlist).matrix;
-
-    // This should probably be handled somewhere else, but for now
-    // it keeps the selection box correctly positioned when zoomed
-    m.e *= currentZoom;
-    m.f *= currentZoom;
+    let m = transformListToTransform(tlist).matrix;
+    // Convert to root space coordinates
+    m = matrixMultiply(svgFactory_.getCanvas().getRootSpaceMatrix(), m);
 
     if (!bbox) {
       bbox = getBBox(selected);
@@ -155,7 +159,7 @@ export class Selector {
     // *
     offset *= currentZoom;
 
-    const nbox = transformBox(l * currentZoom, t * currentZoom, w * currentZoom, h * currentZoom, m);
+    const nbox = transformBox(l, t, w, h, m);
     const { aabox } = nbox;
     let nbax = aabox.x - offset;
     let nbay = aabox.y - offset;

@@ -322,8 +322,9 @@ export const alignSelectedElements = function (type, relativeTo) {
   if (relativeTo === 'page') {
     minx = 0;
     miny = 0;
-    maxx = elementContext_.getContentW();
-    maxy = elementContext_.getContentH();
+    const areaSize = elementContext_.getCanvas().getCurrentDrawing().getSvgElem().viewBox.baseVal;
+    maxx = areaSize.width;
+    maxy = areaSize.height;
   }
 
   const dx = new Array(len);
@@ -931,15 +932,20 @@ export const updateCanvas = function (w, h) {
   const bg = document.getElementById('canvasBackground');
   const oldX = Number(elementContext_.getSVGContent().getAttribute('x'));
   const oldY = Number(elementContext_.getSVGContent().getAttribute('y'));
-  const x = ((w - this.contentW * currentZoom) / 2);
-  const y = ((h - this.contentH * currentZoom) / 2);
+  const contentW = elementContext_.getContentW();
+  const contentH = elementContext_.getContentH();
+  const x = ((w - contentW * currentZoom) / 2);
+  const y = ((h - contentH * currentZoom) / 2);
+  const config = elementContext_.getCurConfig();
+  const viewBoxWidth = config.viewBoxWidth ? config.viewBoxWidth : contentW;
+  const viewBoxHeight = config.viewBoxHeight ? config.viewBoxHeight : contentH;
 
   assignAttributes(elementContext_.getSVGContent(), {
-    width: this.contentW * currentZoom,
-    height: this.contentH * currentZoom,
+    width: contentW * currentZoom,
+    height: contentH * currentZoom,
     x,
     y,
-    viewBox: '0 0 ' + this.contentW + ' ' + this.contentH
+    viewBox: '0 0 ' + viewBoxWidth + ' ' + viewBoxHeight
   });
 
   assignAttributes(bg, {
@@ -957,7 +963,16 @@ export const updateCanvas = function (w, h) {
     });
   }
 
-  elementContext_.getCanvas().selectorManager.selectorParentGroup.setAttribute('transform', 'translate(' + x + ',' + y + ')');
+  // The canvas root transform matrix is cached so recalculate it
+  elementContext_.getCanvas().calculateRootSpaceMatrix();
+
+  const selectedElements = elementContext_.getSelectedElements();
+  selectedElements.forEach((selected) => {
+    if (selected) {
+      elementContext_.getCanvas().selectorManager.requestSelector(selected).resize();
+    }
+  });
+  elementContext_.getCanvas().pathActions.zoomChange();
 
   /**
 * Invoked upon updates to the canvas.

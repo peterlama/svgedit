@@ -241,7 +241,7 @@ export const textActionsMethod = (function () {
 * @returns {module:math.XYObject}
 */
   function ptToScreen (xIn, yIn) {
-    const out = {
+    let out = {
       x: xIn,
       y: yIn
     };
@@ -251,9 +251,9 @@ export const textActionsMethod = (function () {
       out.x = pt.x;
       out.y = pt.y;
     }
-    const currentZoom = textActionsContext_.getCurrentZoom();
-    out.x *= currentZoom;
-    out.y *= currentZoom;
+
+    const rootMatrix = textActionsContext_.getCanvas().getRootSpaceMatrix();
+    out = transformPoint(out.x, out.y, rootMatrix);
 
     return out;
   }

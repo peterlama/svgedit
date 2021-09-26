@@ -63,9 +63,8 @@ export const getGripPtMethod = function (seg, altPt) {
     out = pt;
   }
   editorContext_ = pathMethodsContext_.getEditorContext();
-  const currentZoom = editorContext_.getCurrentZoom();
-  out.x *= currentZoom;
-  out.y *= currentZoom;
+  // Convert to root space coordinates
+  out = transformPoint(out.x, out.y, editorContext_.canvas.getRootSpaceMatrix());
 
   return out;
 };
@@ -76,7 +75,7 @@ export const getGripPtMethod = function (seg, altPt) {
 * @returns {module:math.XYObject}
 */
 export const getPointFromGripMethod = function (pt, pth) {
-  const out = {
+  let out = {
     x: pt.x,
     y: pt.y
   };
@@ -87,9 +86,7 @@ export const getPointFromGripMethod = function (pt, pth) {
     out.y = pt.y;
   }
   editorContext_ = pathMethodsContext_.getEditorContext();
-  const currentZoom = editorContext_.getCurrentZoom();
-  out.x /= currentZoom;
-  out.y /= currentZoom;
+  //out = transformPoint(out.x, out.y, editorContext_.canvas.getRootSpaceMatrix().inverse());
 
   return out;
 };

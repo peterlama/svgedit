@@ -149,6 +149,7 @@ export const changeSelectedAttributeNoUndoMethod = function (attr, newValue, ele
   while (i--) {
     let elem = elems[i];
     if (isNullish(elem)) { continue; }
+    if (attr == '#text' && elem.tagName != 'text') { continue; }
 
     // Set x,y vals on elements that don't have them
     if ((attr === 'x' || attr === 'y') && noXYElems.includes(elem.tagName)) {

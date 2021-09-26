@@ -559,7 +559,7 @@ export const getBBox = function (elem) {
     if (elname === 'use') {
       ret = groupBBFix(selected); // , true);
     }
-    if (elname === 'use' || (elname === 'foreignObject' && isWebkit())) {
+    if (elname === 'foreignObject' && isWebkit()) {
       if (!ret) { ret = selected.getBBox(); }
 
     } else if (visElemsArr.includes(elname)) {

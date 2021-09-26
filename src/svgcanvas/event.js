@@ -12,7 +12,7 @@ import {
   convertAttrs
 } from '../common/units.js';
 import {
-  transformPoint, hasMatrixTransform, getMatrix, snapToAngle
+  transformPoint, hasMatrixTransform, getMatrix, snapToAngle, transformBox
 } from './math.js';
 import { supportsNonScalingStroke } from '../common/browser.js';
 import * as draw from './draw.js';
@@ -112,6 +112,16 @@ export const mouseMoveEvent = function (evt) {
     y = snapToGrid(y);
   }
 
+  const contentToRootMatrix = svgCanvas.getRootSpaceMatrix();
+  const rootSpaceStartPoint = transformPoint(eventContext_.getRStartX(), eventContext_.getRStartY(), contentToRootMatrix);
+  const rootSpaceCurrentPoint = transformPoint(pt.x, pt.y, contentToRootMatrix);
+  const mouseBox = {
+    x: Math.min(rootSpaceStartPoint.x, rootSpaceCurrentPoint.x),
+    y: Math.min(rootSpaceStartPoint.y, rootSpaceCurrentPoint.y),
+    width: Math.abs(rootSpaceCurrentPoint.x - rootSpaceStartPoint.x),
+    height: Math.abs(rootSpaceCurrentPoint.y - rootSpaceStartPoint.y)
+  }
+
   evt.preventDefault();
   let tlist;
   switch (eventContext_.getCurrentMode()) {
@@ -162,14 +172,7 @@ export const mouseMoveEvent = function (evt) {
     }
     break;
   } case 'multiselect': {
-    realX *= currentZoom;
-    realY *= currentZoom;
-    assignAttributes(eventContext_.getRubberBox(), {
-      x: Math.min(eventContext_.getRStartX(), realX),
-      y: Math.min(eventContext_.getRStartY(), realY),
-      width: Math.abs(realX - eventContext_.getRStartX()),
-      height: Math.abs(realY - eventContext_.getRStartY())
-    }, 100);
+    assignAttributes(eventContext_.getRubberBox(), mouseBox, 100);
 
     // for each selected:
     // - if newList contains selected, do nothing
@@ -180,8 +183,19 @@ export const mouseMoveEvent = function (evt) {
 
     // For every element in the intersection, add if not present in selectedElements.
     len = newList.length;
+    const currentLayer = svgCanvas.getCurrentDrawing().getCurrentLayer();
+    const currentGroup = eventContext_.getCurrentGroup();
+    const disableGroupEdit = eventContext_.getCurConfig().disableGroupEdit;
+
     for (i = 0; i < len; ++i) {
       const intElem = newList[i];
+      if (disableGroupEdit) {
+        // Don't select children of a group. Go up until we have a direct child of the layer.
+        while (!(intElem.parentNode !== currentGroup || intElem.parentNode !== currentLayer)) {
+          intElem = intElem.parentNode;
+        }
+      }
+
       // Found an element that was not selected before, so we should add it.
       if (!selectedElements().includes(intElem)) {
         elemsToAdd.push(intElem);
@@ -269,7 +283,7 @@ export const mouseMoveEvent = function (evt) {
     }
 
     translateOrigin.setTranslate(-(left + tx), -(top + ty));
-    if (evt.shiftKey) {
+    if (evt.shiftKey || selected.classList.contains('lock-aspect-ratio')) {
       if (sx === 1) {
         sx = sy;
       } else { sy = sx; }
@@ -294,14 +308,7 @@ export const mouseMoveEvent = function (evt) {
 
     break;
   } case 'zoom': {
-    realX *= currentZoom;
-    realY *= currentZoom;
-    assignAttributes(eventContext_.getRubberBox(), {
-      x: Math.min(eventContext_.getRStartX() * currentZoom, realX),
-      y: Math.min(eventContext_.getRStartY() * currentZoom, realY),
-      width: Math.abs(realX - eventContext_.getRStartX() * currentZoom),
-      height: Math.abs(realY - eventContext_.getRStartY() * currentZoom)
-    }, 100);
+    assignAttributes(eventContext_.getRubberBox(), mouseBox, 100);
     break;
   } case 'text': {
     assignAttributes(shape, {
@@ -433,9 +440,6 @@ export const mouseMoveEvent = function (evt) {
   } case 'path':
     // fall through
   case 'pathedit': {
-    x *= currentZoom;
-    y *= currentZoom;
-
     if (eventContext_.getCurConfig().gridSnapping) {
       x = snapToGrid(x);
       y = snapToGrid(y);
@@ -457,21 +461,12 @@ export const mouseMoveEvent = function (evt) {
     }
 
     if (eventContext_.getRubberBox() && eventContext_.getRubberBox().getAttribute('display') !== 'none') {
-      realX *= currentZoom;
-      realY *= currentZoom;
-      assignAttributes(eventContext_.getRubberBox(), {
-        x: Math.min(eventContext_.getRStartX() * currentZoom, realX),
-        y: Math.min(eventContext_.getRStartY() * currentZoom, realY),
-        width: Math.abs(realX - eventContext_.getRStartX() * currentZoom),
-        height: Math.abs(realY - eventContext_.getRStartY() * currentZoom)
-      }, 100);
+      assignAttributes(eventContext_.getRubberBox(), mouseBox, 100);
     }
     svgCanvas.pathActions.mouseMove(x, y);
 
     break;
   } case 'textedit': {
-    x *= currentZoom;
-    y *= currentZoom;
     // if (eventContext_.getRubberBox() && eventContext_.getRubberBox().getAttribute('display') !== 'none') {
     //   assignAttributes(eventContext_.getRubberBox(), {
     //     x: Math.min(eventContext_.getStartX(), x),
@@ -481,7 +476,7 @@ export const mouseMoveEvent = function (evt) {
     //   }, 100);
     // }
 
-    svgCanvas.textActions.mouseMove(mouseX, mouseY);
+    svgCanvas.textActions.mouseMove(x, y);
 
     break;
   } case 'rotate': {
@@ -894,6 +889,7 @@ export const dblClickEvent = function (evt) {
   const evtTarget = evt.target;
   const parent = evtTarget.parentNode;
   const svgCanvas = eventContext_.getCanvas();
+  const disableGroupEdit = eventContext_.getCurConfig().disableGroupEdit;
 
   let mouseTarget = svgCanvas.getMouseTarget(evt);
   const { tagName } = mouseTarget;
@@ -906,7 +902,7 @@ export const dblClickEvent = function (evt) {
   // Do nothing if already in current group
   if (parent === eventContext_.getCurrentGroup()) { return; }
 
-  if ((tagName === 'g' || tagName === 'a') && getRotationAngle(mouseTarget)) {
+  if ((tagName === 'g' || tagName === 'a') && getRotationAngle(mouseTarget) && !disableGroupEdit) {
     // TODO: Allow method of in-group editing without having to do
     // this (similar to editing rotated paths)
 
@@ -927,7 +923,9 @@ export const dblClickEvent = function (evt) {
     // Escape from in-group edit
     return;
   }
+  if (!disableGroupEdit) {
   draw.setContext(mouseTarget);
+  }
 };
 
 /**
@@ -957,7 +955,7 @@ export const mouseDownEvent = function (evt) {
     svgCanvas.cloneSelectedElements(0, 0);
   }
 
-  eventContext_.setRootSctm($id('svgcontent').querySelector('g').getScreenCTM().inverse());
+  eventContext_.setRootSctm(svgCanvas.getCurrentDrawing().getCurrentLayer().getScreenCTM().inverse());
 
   const pt = transformPoint(evt.clientX, evt.clientY, eventContext_.getrootSctm());
   const mouseX = pt.x * currentZoom;
@@ -1057,8 +1055,6 @@ export const mouseDownEvent = function (evt) {
       if (isNullish(eventContext_.getRubberBox())) {
         eventContext_.setRubberBox(svgCanvas.selectorManager.getRubberBandBox());
       }
-      eventContext_.setRStartX(eventContext_.getRStartX() * currentZoom);
-      eventContext_.setRStartY(eventContext_.getRStartY() * currentZoom);
 
       assignAttributes(eventContext_.getRubberBox(), {
         x: eventContext_.getRStartX(),
@@ -1075,8 +1071,8 @@ export const mouseDownEvent = function (evt) {
       eventContext_.setRubberBox(svgCanvas.selectorManager.getRubberBandBox());
     }
     assignAttributes(eventContext_.getRubberBox(), {
-      x: realX * currentZoom,
-      y: realX * currentZoom,
+      x: realX,
+      y: realX,
       width: 0,
       height: 0,
       display: 'inline'
@@ -1087,13 +1083,14 @@ export const mouseDownEvent = function (evt) {
     eventContext_.setStartX(x);
     eventContext_.setStartY(y);
 
-    // Getting the BBox from the selection box, since we know we
-    // want to orient around it
-    eventContext_.setInitBbox(utilsGetBBox($id('selectedBox0')));
-    const bb = {};
-    for (const [ key, val ] of Object.entries(eventContext_.getInitBbox())) {
-      bb[key] = val / currentZoom;
-    }
+    // The bounding box of an element doesn't include the transform attribute.
+    // Calculate the actual size by transforming by its matrix, then by the inverse
+    // of its parent svg matrix to get it back to the correct coordinate system.
+    const drawingCTM = svgCanvas.getCurrentDrawing().getCurrentLayer().getCTM();
+    let bb = utilsGetBBox(mouseTarget);
+    bb = transformBox(bb.x, bb.y, bb.width, bb.height, mouseTarget.getCTM()).aabox;
+    bb = transformBox(bb.x, bb.y, bb.width, bb.height, drawingCTM.inverse()).aabox;
+
     eventContext_.setInitBbox(bb);
 
     // append three dummy transforms to the tlist so that
@@ -1181,6 +1178,7 @@ export const mouseDownEvent = function (evt) {
   case 'line': {
     eventContext_.setStarted(true);
     const strokeW = Number(curShape.stroke_width) === 0 ? 1 : curShape.stroke_width;
+    const strokeColor = curShape.stroke != 'none' ? curShape.stroke : curShape.fill;
     svgCanvas.addSVGElementFromJson({
       element: 'line',
       curStyles: true,
@@ -1190,7 +1188,7 @@ export const mouseDownEvent = function (evt) {
         x2: x,
         y2: y,
         id: svgCanvas.getNextId(),
-        stroke: curShape.stroke,
+        stroke: strokeColor,
         'stroke-width': strokeW,
         'stroke-dasharray': curShape.stroke_dasharray,
         'stroke-linejoin': curShape.stroke_linejoin,
@@ -1254,14 +1252,10 @@ export const mouseDownEvent = function (evt) {
   case 'path':
     // Fall through
   case 'pathedit':
-    eventContext_.setStartX(eventContext_.getStartX() * currentZoom);
-    eventContext_.setStartY(eventContext_.getStartY() * currentZoom);
     svgCanvas.pathActions.mouseDown(evt, mouseTarget, eventContext_.getStartX(), eventContext_.getStartY());
     eventContext_.setStarted(true);
     break;
   case 'textedit':
-    eventContext_.setStartX(eventContext_.getStartX() * currentZoom);
-    eventContext_.setStartY(eventContext_.getStartY() * currentZoom);
     svgCanvas.textActions.mouseDown(evt, mouseTarget, eventContext_.getStartX(), eventContext_.getStartY());
     eventContext_.setStarted(true);
     break;
@@ -1288,7 +1282,8 @@ export const mouseDownEvent = function (evt) {
     event: evt,
     start_x: eventContext_.getStartX(),
     start_y: eventContext_.getStartY(),
-    selectedElements: selectedElements()
+    selectedElements: selectedElements(),
+    commandStarted: eventContext_.getStarted()
   }, true);
 
   extResult.forEach(function(r){
@@ -1307,10 +1302,9 @@ export const DOMMouseScrollEvent = function (e) {
   const currentZoom = eventContext_.getCurrentZoom();
   const svgCanvas = eventContext_.getCanvas();
   const { $id } = svgCanvas;
-  if (!e.shiftKey) { return; }
 
   e.preventDefault();
-  const evt = e.originalEvent;
+  const evt = e.originalEvent ? e.originalEvent : e;
 
   eventContext_.setRootSctm($id('svgcontent').querySelector('g').getScreenCTM().inverse());
 
@@ -1380,7 +1374,6 @@ export const DOMMouseScrollEvent = function (e) {
   };
 
   svgCanvas.setZoom(zoomlevel);
-  document.getElementById('zoom').value = ((zoomlevel * 100).toFixed(1));
 
   svgCanvas.call('updateCanvas', { center: false, newCtr });
   svgCanvas.call('zoomDone');

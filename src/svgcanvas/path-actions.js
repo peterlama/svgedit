@@ -338,12 +338,15 @@ export const pathActionsMethod = (function () {
       let id;
       editorContext_ = pathActionsContext_.getEditorContext();
       if (editorContext_.getCurrentMode() === 'path') {
-        let mouseX = startX; // Was this meant to work with the other `mouseX`? (was defined globally so adding `let` to at least avoid a global)
-        let mouseY = startY; // Was this meant to work with the other `mouseY`? (was defined globally so adding `let` to at least avoid a global)
+        const rootSpaceMatrix = pathActionsContext_.getEditorContext().canvas.getRootSpaceMatrix();
+        // Convert to root space coordinates
+        const mousePoint = transformPoint(startX, startY, rootSpaceMatrix);
+        let mouseX = mousePoint.x;
+        let mouseY = mousePoint.y;
 
         const currentZoom = editorContext_.getCurrentZoom();
-        let x = mouseX / currentZoom;
-        let y = mouseY / currentZoom;
+        let x = startX;
+        let y = startY;
         let stretchy = getElem('path_stretch_line');
         newPoint = [ x, y ];
 
@@ -412,7 +415,11 @@ export const pathActionsMethod = (function () {
 
           const newpath = getElem(id);
           let newseg;
-          let sSeg;
+          // Use the segment defined by stretchy
+          let sSeg = stretchy.pathSegList.getItem(1);
+          // Convert from root space coordinates to element space coordinates
+          const sSegPt1 = transformPoint(sSeg.x1, sSeg.y1, rootSpaceMatrix.inverse());
+          const sSegPt2 = transformPoint(sSeg.x2, sSeg.y2, rootSpaceMatrix.inverse());
           const len = seglist.numberOfItems;
           // if we clicked on an existing point, then we are done this path, commit it
           // (i, i+1) are the x,y that were clicked on
@@ -429,7 +436,7 @@ export const pathActionsMethod = (function () {
               sSeg = stretchy.pathSegList.getItem(1);
               newseg = sSeg.pathSegType === 4
                 ? drawnPath.createSVGPathSegLinetoAbs(absX, absY)
-                : drawnPath.createSVGPathSegCurvetoCubicAbs(absX, absY, sSeg.x1 / currentZoom, sSeg.y1 / currentZoom, absX, absY);
+                : drawnPath.createSVGPathSegCurvetoCubicAbs(absX, absY, sSegPt1.x, sSegPt1.y, absX, absY);
 
               const endseg = drawnPath.createSVGPathSegClosePath();
               seglist.appendItem(newseg);
@@ -480,29 +487,25 @@ export const pathActionsMethod = (function () {
               ({ x, y } = xya);
             }
 
-            // Use the segment defined by stretchy
-            sSeg = stretchy.pathSegList.getItem(1);
+            
             newseg = sSeg.pathSegType === 4
               ? drawnPath.createSVGPathSegLinetoAbs(editorContext_.round(x), editorContext_.round(y))
               : drawnPath.createSVGPathSegCurvetoCubicAbs(
                 editorContext_.round(x),
                 editorContext_.round(y),
-                sSeg.x1 / currentZoom,
-                sSeg.y1 / currentZoom,
-                sSeg.x2 / currentZoom,
-                sSeg.y2 / currentZoom
+                sSegPt1.x,
+                sSegPt1.y,
+                sSegPt2.x,
+                sSegPt2.y
               );
 
             drawnPath.pathSegList.appendItem(newseg);
 
-            x *= currentZoom;
-            y *= currentZoom;
-
             // set stretchy line to latest point
-            stretchy.setAttribute('d', [ 'M', x, y, x, y ].join(' '));
+            stretchy.setAttribute('d', [ 'M', mouseX, mouseY, mouseX, mouseY ].join(' '));
             index = num;
             if (subpath) { index += path.segs.length; }
-            pathActionsContext_.addPointGrip(index, x, y);
+            pathActionsContext_.addPointGrip(index, mouseX, mouseY);
           }
           // keep = true;
         }
@@ -573,6 +576,9 @@ export const pathActionsMethod = (function () {
       const currentZoom = editorContext_.getCurrentZoom();
       hasMoved = true;
       const drawnPath = editorContext_.getDrawnPath();
+      const rootSpaceMatrix = editorContext_.canvas.getRootSpaceMatrix();
+      const rootMousePt = transformPoint(mouseX, mouseY, rootSpaceMatrix);
+
       if (editorContext_.getCurrentMode() === 'path') {
         if (!drawnPath) { return; }
         const seglist = drawnPath.pathSegList;
@@ -587,8 +593,8 @@ export const pathActionsMethod = (function () {
           const pointGrip2 = pathActionsContext_.addCtrlGrip('0c2');
 
           // dragging pointGrip1
-          pointGrip1.setAttribute('cx', mouseX);
-          pointGrip1.setAttribute('cy', mouseY);
+          pointGrip1.setAttribute('cx', rootMousePt.x);
+          pointGrip1.setAttribute('cy', rootMousePt.y);
           pointGrip1.setAttribute('display', 'inline');
 
           const ptX = newPoint[0];
@@ -596,21 +602,22 @@ export const pathActionsMethod = (function () {
 
           // set curve
           // const seg = seglist.getItem(index);
-          const curX = mouseX / currentZoom;
-          const curY = mouseY / currentZoom;
+          const curX = mouseX;
+          const curY = mouseY;
           const altX = (ptX + (ptX - curX));
           const altY = (ptY + (ptY - curY));
+          const movePt = transformPoint(altX, altY, rootSpaceMatrix);
 
-          pointGrip2.setAttribute('cx', altX * currentZoom);
-          pointGrip2.setAttribute('cy', altY * currentZoom);
+          pointGrip2.setAttribute('cx', movePt.x);
+          pointGrip2.setAttribute('cy', movePt.y);
           pointGrip2.setAttribute('display', 'inline');
 
           const ctrlLine = pathActionsContext_.getCtrlLine(1);
           assignAttributes(ctrlLine, {
-            x1: mouseX,
-            y1: mouseY,
-            x2: altX * currentZoom,
-            y2: altY * currentZoom,
+            x1: rootMousePt.x,
+            y1: rootMousePt.y,
+            x2: movePt.x,
+            y2: movePt.y,
             display: 'inline'
           });
 
@@ -625,8 +632,8 @@ export const pathActionsMethod = (function () {
               lastX += (lastX - last.x2);
               lastY += (lastY - last.y2);
             } else if (firstCtrl) {
-              lastX = firstCtrl[0] / currentZoom;
-              lastY = firstCtrl[1] / currentZoom;
+              lastX = firstCtrl[0];
+              lastY = firstCtrl[1];
             }
             pathActionsContext_.replacePathSeg(6, index, [ ptX, ptY, lastX, lastY, altX, altY ], drawnPath);
           }
@@ -637,16 +644,18 @@ export const pathActionsMethod = (function () {
             if (prev.pathSegType === 6) {
               const prevX = prev.x + (prev.x - prev.x2);
               const prevY = prev.y + (prev.y - prev.y2);
+              const prevPt = transformPoint(prevX, prevY, rootSpaceMatrix);
               pathActionsContext_.replacePathSeg(
                 6,
                 1,
-                [ mouseX, mouseY, prevX * currentZoom, prevY * currentZoom, mouseX, mouseY ],
+                [ rootMousePt.x, rootMousePt.y, prevPt.x, prevPt.y, rootMousePt.x, rootMousePt.y ],
                 stretchy
               );
             } else if (firstCtrl) {
-              pathActionsContext_.replacePathSeg(6, 1, [ mouseX, mouseY, firstCtrl[0], firstCtrl[1], mouseX, mouseY ], stretchy);
+              const ctlPt = transformPoint(firstCtrl[0], firstCtrl[1], rootSpaceMatrix);
+              pathActionsContext_.replacePathSeg(6, 1, [ rootMousePt.x, rootMousePt.y, ctlPt.x, ctlPt.y, rootMousePt.x, rootMousePt.y ], stretchy);
             } else {
-              pathActionsContext_.replacePathSeg(4, 1, [ mouseX, mouseY ], stretchy);
+              pathActionsContext_.replacePathSeg(4, 1, [ rootMousePt.x, rootMousePt.y ], stretchy);
             }
           }
         }

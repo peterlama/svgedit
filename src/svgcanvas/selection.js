@@ -9,7 +9,7 @@ import { NS } from './namespaces.js';
 import {
   isNullish, getBBox as utilsGetBBox, getStrokedBBoxDefaultVisible
 } from './utilities.js';
-import { transformPoint, transformListToTransform, rectsIntersect } from './math.js';
+import { transformPoint, transformBox, transformListToTransform, rectsIntersect } from './math.js';
 import * as hstry from './history.js';
 import { getClosest } from '../editor/components/jgraduate/Util.js';
 
@@ -258,9 +258,12 @@ export const getIntersectionListMethod = function (rect) {
   if (!rect) {
     rubberBBox = selectionContext_.getRubberBox().getBBox();
     const bb = selectionContext_.getSVGContent().createSVGRect();
+    // Transform selection bounding box into the same coordinate system as the elements
+    const rootToContentMatrix = svgCanvas.getRootSpaceMatrix().inverse();
+    rubberBBox = transformBox(rubberBBox.x, rubberBBox.y, rubberBBox.width, rubberBBox.height, rootToContentMatrix).aabox;
 
-    [ 'x', 'y', 'width', 'height', 'top', 'right', 'bottom', 'left' ].forEach((o) => {
-      bb[o] = rubberBBox[o] / currentZoom;
+    [ 'x', 'y', 'width', 'height'].forEach((o) => {
+      bb[o] = rubberBBox[o];
     });
     rubberBBox = bb;
   } else {
@@ -288,6 +291,25 @@ export const getIntersectionListMethod = function (rect) {
         resultList.push(curBBoxes[i].elem);
       }
     }
+  }
+
+  if (selectionContext_.getCurConfig().disableGroupEdit) {
+    // Don't select children of a group. Go up until we have a direct child of the layer.
+    let filteredResult = [];
+    let currentLayer = svgCanvas.getCurrentDrawing().getCurrentLayer();
+    let currentGroup = svgCanvas.getCurrentGroup();
+
+    for (var i = 0; i < resultList.length; i++) {
+      var elem = resultList[i];
+
+      while (elem && !(elem.parentNode == currentGroup || elem.parentNode == currentLayer)) {
+        elem = elem.parentNode;
+      }
+      if (elem) {
+        filteredResult.push(elem);
+      }
+    }
+    return filteredResult;
   }
 
   // addToSelection expects an array, but it's ok to pass a NodeList

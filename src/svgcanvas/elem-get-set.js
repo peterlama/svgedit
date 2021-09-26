@@ -38,8 +38,14 @@ export const init = function (elemContext) {
 */
 export const getResolutionMethod = function () {
   const currentZoom = elemContext_.getCurrentZoom();
-  const w = elemContext_.getSVGContent().getAttribute('width') / currentZoom;
-  const h = elemContext_.getSVGContent().getAttribute('height') / currentZoom;
+  const config = elemContext_.getCurConfig();
+  let w = elemContext_.getSVGContent().getAttribute('width') / currentZoom;
+  let h = elemContext_.getSVGContent().getAttribute('height') / currentZoom;
+
+  if (config.viewBoxWidth) {
+		w = config.viewBoxWidth;
+		h = config.viewBoxHeight;
+	}
 
   return {
     w,
@@ -300,15 +306,7 @@ export const setBBoxZoomMethod = function (val, editorW, editorH) {
 * @returns {void}
 */
 export const setZoomMethod = function (zoomLevel) {
-  const selectedElements = elemContext_.getSelectedElements();
-  const res = elemContext_.getCanvas().getResolution();
-  elemContext_.getSVGContent().setAttribute('viewBox', '0 0 ' + res.w / zoomLevel + ' ' + res.h / zoomLevel);
   elemContext_.setCurrentZoom(zoomLevel);
-  selectedElements.forEach(function(elem){
-    if (!elem) { return; }
-    elemContext_.getCanvas().selectorManager.requestSelector(elem).resize();
-  });
-  elemContext_.getCanvas().pathActions.zoomChange();
   elemContext_.getCanvas().runExtensions('zoomChanged', zoomLevel);
 };
 

@@ -189,6 +189,7 @@ export const recalculateDimensions = function (selected) {
   case 'foreignObject':
   case 'rect':
   case 'image':
+  case 'svg':
     attrs = [ 'width', 'height', 'x', 'y' ];
     break;
   case 'use':

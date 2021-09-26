@@ -310,7 +310,7 @@ class SvgCanvas {
         fill: (curConfig.initFill.color === 'none' ? '' : '#') + curConfig.initFill.color,
         fill_paint: null,
         fill_opacity: curConfig.initFill.opacity,
-        stroke: '#' + curConfig.initStroke.color,
+        stroke: (curConfig.initStroke.color === 'none' ? '' : '#') + curConfig.initStroke.color,
         stroke_paint: null,
         stroke_opacity: curConfig.initStroke.opacity,
         stroke_width: curConfig.initStroke.width,
@@ -513,7 +513,8 @@ class SvgCanvas {
         svgRoot() { return svgroot; },
         svgContent() { return svgcontent; },
         getDataStorage,
-        getCurrentZoom
+        getCurrentZoom,
+        getCanvas() { return canvas; }
       }
     );
     /**
@@ -628,7 +629,8 @@ class SvgCanvas {
         getCurBBoxes(_value) { return curBBoxes; },
         getCurrentResizeMode() { return currentResizeMode; },
         addCommandToHistory,
-        getSelector() { return Selector; }
+        getSelector() { return Selector; },
+        getCurConfig() { return curConfig; }
       }
     );
 
@@ -1084,6 +1086,33 @@ class SvgCanvas {
 
     // Root Current Transformation Matrix in user units
     let rootSctm = null;
+
+    let rootCanvasMatrix = null;
+
+    this.calculateRootSpaceMatrix = () => {
+      const drawing = getCurrentDrawing();
+      const firstG = document.querySelector(`#${getSVGContent().id} > g`);
+      rootCanvasMatrix = firstG ? firstG.getCTM() : getSVGRoot().getCTM();
+
+      if (drawing.getSvgElem() !== getSVGContent()) {
+        rootCanvasMatrix = matrixMultiply(rootCanvasMatrix, drawing.getCurrentLayer().getCTM());
+      }
+  
+      return rootCanvasMatrix;
+    };
+    /**
+     * Returns a matrix that transforms drawing coordinates
+     * into root space coordinates.
+     * 
+     * @return {SVGMatrix}
+     */
+     this.getRootSpaceMatrix = () => {
+      if (rootCanvasMatrix === null) {
+        this.calculateRootSpaceMatrix();
+      }
+
+      return rootCanvasMatrix;
+    };
 
     /**
 * Group: Selection.
@@ -1703,7 +1732,8 @@ class SvgCanvas {
         getCurProperties(key) { return curProperties[key]; },
         setCurShape(key, value) { curShape[key] = value; },
         getCurText(key) { return curText[key]; },
-        setCurText(key, value) { curText[key] = value; }
+        setCurText(key, value) { curText[key] = value; },
+        getCurConfig() { return curConfig; }
       }
     );
 
@@ -2441,7 +2471,8 @@ class SvgCanvas {
         getSVGContent,
         getCanvas() { return canvas; },
         getDataStorage,
-        getVisElems() { return visElems; }
+        getVisElems() { return visElems; },
+        getCurConfig() { return curConfig; }
       }
     );
 
