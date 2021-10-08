@@ -165,7 +165,7 @@ export const sanitizeSvg = function (node) {
         // Bypassing the whitelist to allow se: and oi: prefixes
         // We can add specific namepaces on demand for now.
         // Is there a more appropriate way to do this?
-        if (attrName.startsWith('se:') || attrName.startsWith('oi:')|| attrName.startsWith('data-')) {
+        if (attrName.startsWith('se:') || attrName.startsWith('cis:') || attrName.startsWith('oi:')|| attrName.startsWith('data-')) {
           seAttrs.push([ attrName, attr.value ]);
         } else {
           console.warn(`sanitizeSvg: attribute ${attrName} in element ${node.nodeName} not in whitelist is removed`);
