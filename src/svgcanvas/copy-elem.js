@@ -24,7 +24,7 @@ export const copyElem = function (el, getNextId) {
       newEl.append(copyElem(child, getNextId));
       break;
     case 3: // text node
-      newEl.textContent = child.nodeValue;
+      newEl.append(child.nodeValue);
       break;
     default:
       break;

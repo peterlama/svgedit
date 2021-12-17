@@ -297,7 +297,7 @@ export const getIntersectionListMethod = function (rect) {
     // Don't select children of a group. Go up until we have a direct child of the layer.
     let filteredResult = [];
     let currentLayer = svgCanvas.getCurrentDrawing().getCurrentLayer();
-    let currentGroup = svgCanvas.getCurrentGroup();
+    let currentGroup = selectionContext_.getCurrentGroup();
 
     for (var i = 0; i < resultList.length; i++) {
       var elem = resultList[i];
