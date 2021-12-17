@@ -1349,7 +1349,7 @@ class SvgCanvas {
       container.addEventListener('mouseleave', mouseOut);
 
       // TODO(rafaelcastrocouto): User preference for shift key and zoom factor
-      container.addEventListener('mousewheel', DOMMouseScrollEvent);
+      container.addEventListener('wheel', DOMMouseScrollEvent);
       container.addEventListener('DOMMouseScroll', DOMMouseScrollEvent);
 
     }());

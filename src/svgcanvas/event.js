@@ -1303,8 +1303,19 @@ export const DOMMouseScrollEvent = function (e) {
   const svgCanvas = eventContext_.getCanvas();
   const { $id } = svgCanvas;
 
-  e.preventDefault();
+  
   const evt = e.originalEvent ? e.originalEvent : e;
+
+  let zoomIncrement = 0.25;
+
+  // Zoom from mouse wheel (assumes delta 120) or trackpad pinch (assumes evt.ctrlKey true),
+  // but not two finger trackpad scroll
+  if (evt.deltaY && evt.ctrlKey) {
+    zoomIncrement = Math.min(Math.abs(evt.deltaY) / 120, zoomIncrement);
+  } else if (Math.abs(evt.wheelDelta) != 120) {
+    return;
+  }
+  e.preventDefault();
 
   eventContext_.setRootSctm($id('svgcontent').querySelector('g').getScreenCTM().inverse());
 
@@ -1332,10 +1343,7 @@ export const DOMMouseScrollEvent = function (e) {
   const wOffsetLeft = wOffset.left + rulerwidth;
   const wOffsetTop = wOffset.top + rulerwidth;
 
-  const delta = (evt.wheelDelta) ? evt.wheelDelta : (evt.detail) ? -evt.detail : 0;
-  if (!delta) { return; }
-
-  let factor = Math.max(3 / 4, Math.min(4 / 3, (delta)));
+  let factor = evt.deltaY < 0 ? 1 / (1 - zoomIncrement) : 1 - zoomIncrement;
 
   let wZoom; let hZoom;
   if (factor > 1) {
