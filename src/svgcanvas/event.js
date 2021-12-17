@@ -646,6 +646,13 @@ export const mouseUpEvent = function (evt) {
           });
         }
       }
+
+      // also run extension for select mode
+      svgCanvas.runExtensions('mouseUp', {
+        event: evt,
+        mouse_x: mouseX,
+        mouse_y: mouseY
+      }, true);
     }
     return;
   case 'zoom': {
